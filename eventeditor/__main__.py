@@ -1,3 +1,6 @@
+import sys
+
+sys.setrecursionlimit(1500)
 import argparse
 import gzip
 import os
@@ -5,7 +8,6 @@ import signal
 import sys
 import traceback
 import typing
-
 import evfl
 from evfl import EventFlow
 import eventeditor.ai as ai
@@ -15,10 +17,14 @@ from eventeditor.event_view import EventView
 from eventeditor.flow_data import FlowData, FlowDataChangeReason
 from eventeditor.flowchart_view import FlowchartView
 import eventeditor.util as util
-import PyQt5.QtCore as qc # type: ignore
-import PyQt5.QtGui as qg # type: ignore
-import PyQt5.QtWidgets as q # type: ignore
+import PyQt5.QtCore as qc  # type: ignore
+import PyQt5.QtGui as qg  # type: ignore
+import PyQt5.QtWidgets as q  # type: ignore
 from . import _version
+import pdb; pdb.set_trace()
+import chatgpt_events as cge
+
+
 
 class MainWindow(q.QMainWindow):
     def __init__(self, args) -> None:
@@ -65,7 +71,9 @@ class MainWindow(q.QMainWindow):
         file_menu.addAction(self.open_action)
         file_menu.addSeparator()
         self.open_autosave_action = q.QAction('Open autosave...', self)
-        self.open_autosave_action.triggered.connect(lambda: self.onOpenFile(str(self.flow_data.auto_save.get_directory()), name_filter=f'Flowchart autosave (autosave_{self.flow_data.flow.name}_*.bfevfl.gz)'))
+        self.open_autosave_action.triggered.connect(
+            lambda: self.onOpenFile(str(self.flow_data.auto_save.get_directory()),
+                                    name_filter=f'Flowchart autosave (autosave_{self.flow_data.flow.name}_*.bfevfl.gz)'))
         if not self.flow_data.auto_save.get_directory():
             self.open_autosave_action.setVisible(False)
         file_menu.addAction(self.open_autosave_action)
@@ -122,7 +130,8 @@ class MainWindow(q.QMainWindow):
         wiki_action.triggered.connect(lambda: qg.QDesktopServices.openUrl(qc.QUrl('https://zeldamods.org')))
         help_menu.addAction(wiki_action)
         github_repo_action = q.QAction('GitHub repository', self)
-        github_repo_action.triggered.connect(lambda: qg.QDesktopServices.openUrl(qc.QUrl('https://github.com/leoetlino/event-editor')))
+        github_repo_action.triggered.connect(
+            lambda: qg.QDesktopServices.openUrl(qc.QUrl('https://github.com/leoetlino/event-editor')))
         help_menu.addAction(github_repo_action)
         help_menu.addSeparator()
         about_action = q.QAction('About', self)
@@ -130,7 +139,8 @@ class MainWindow(q.QMainWindow):
         help_menu.addAction(about_action)
 
     def about(self) -> None:
-        q.QMessageBox.about(self, 'About EventEditor', f'<h2>EventEditor</h2><p>EventEditor is an open-source event flow editor for <i>The Legend of Zelda: Breath of the Wild.</i></p><p><small>Version: {self._version}<br>Revision: {self._version_rev}</small></p>')
+        q.QMessageBox.about(self, 'About EventEditor',
+                            f'<h2>EventEditor</h2><p>EventEditor is an open-source event flow editor for <i>The Legend of Zelda: Breath of the Wild.</i></p><p><small>Version: {self._version}<br>Revision: {self._version_rev}</small></p>')
         pass
 
     def initWidgets(self) -> None:
@@ -140,6 +150,54 @@ class MainWindow(q.QMainWindow):
         self.flowchart_view = FlowchartView(self, self.flow_data)
         self.actor_view = ActorView(self, self.flow_data)
         self.event_view = EventView(self, self.flow_data)
+
+        self.gpt_interaction_widget = q.QWidget()
+        self.gpt_interaction_layout = q.QVBoxLayout()  # Initialize QVBoxLayout without passing the widget
+
+        self.gpt_interaction_widget.setLayout(self.gpt_interaction_layout)  # Set layout for the widget
+
+        # Create the prompt input box
+        self.gpt_prompt_edit = q.QLineEdit()
+        self.gpt_prompt_edit.setPlaceholderText("Enter your GPT prompt here...")
+        self.gpt_prompt_edit.setMinimumHeight(30)  # Set a minimum height
+
+        # Create the response area
+        self.gpt_response_edit = q.QTextEdit()
+        self.gpt_response_edit.setPlaceholderText("Response from GPT will be shown here...")
+        self.gpt_response_edit.setMinimumHeight(150)  # Ensure it's tall enough to be useful
+
+        # Create the generate button
+        self.gpt_generate_button = q.QPushButton("Generate GPT Response")
+        self.gpt_generate_button.clicked.connect(self.onGPTGenerateClicked)
+        self.gpt_generate_button.setMinimumHeight(30)  # Set a minimum height
+
+        # Add components to the GPT interaction layout
+        self.gpt_interaction_layout.addWidget(self.gpt_prompt_edit)
+        self.gpt_interaction_layout.addWidget(self.gpt_response_edit)
+        self.gpt_interaction_layout.addWidget(self.gpt_generate_button)
+        self.flowchart_view.layout().addWidget(self.gpt_interaction_widget)
+
+        # Add views to the tab widget
+        self.tab_widget.addTab(self.flowchart_view, 'Flowchart')
+        self.tab_widget.addTab(self.actor_view, 'Actors')
+        self.tab_widget.addTab(self.event_view, 'Events')
+
+        self.setCentralWidget(self.tab_widget)
+    def setupFlowchartArea(self):
+        # Create a widget or layout that represents the flowchart area
+        self.flowchart_widget = q.QWidget()
+        self.flowchart_widget.setLayout(q.QVBoxLayout())
+        # Additional setup for flowchart might go here
+
+        self.tab_widget.addTab(self.flowchart_widget, "Flowchart")
+
+    def onGPTGenerateClicked(self):
+        prompt = self.gpt_prompt_edit.text()
+        try:
+            response_text = cge.generate_text(prompt)
+            self.gpt_response_edit.setText(response_text)
+        except Exception as e:
+            self.gpt_response_edit.setText(f"Failed to generate text: {str(e)}")
 
     def initLayout(self) -> None:
         self.tab_widget.addTab(self.flowchart_view, 'F&lowchart')
@@ -151,6 +209,7 @@ class MainWindow(q.QMainWindow):
     def connectWidgets(self) -> None:
         def set_unsaved_flag():
             self.unsaved = True
+
         self.flow_data.flowDataChanged.connect(lambda reason: set_unsaved_flag())
         self.flow_data.flowDataChanged.connect(lambda reason: self.updateTitleAndActions())
 
@@ -175,7 +234,9 @@ class MainWindow(q.QMainWindow):
             self.writeSettings()
             return
 
-        ret = q.QMessageBox.question(self, 'Unsaved changes', f'{self.flow.name} has unsaved changes. Save changes before closing?', q.QMessageBox.Yes | q.QMessageBox.No | q.QMessageBox.Cancel)
+        ret = q.QMessageBox.question(self, 'Unsaved changes',
+                                     f'{self.flow.name} has unsaved changes. Save changes before closing?',
+                                     q.QMessageBox.Yes | q.QMessageBox.No | q.QMessageBox.Cancel)
 
         if ret == q.QMessageBox.Yes:
             self.writeFlow(self.flow_path)
@@ -240,7 +301,8 @@ class MainWindow(q.QMainWindow):
     def renameFlow(self) -> None:
         if not self.flow or not self.flow.flowchart:
             return
-        text, ok = q.QInputDialog.getText(self, 'Rename', 'Enter a new name for the flowchart.', q.QLineEdit.Normal, self.flow.name)
+        text, ok = q.QInputDialog.getText(self, 'Rename', 'Enter a new name for the flowchart.', q.QLineEdit.Normal,
+                                          self.flow.name)
         if not ok or not text:
             return
         self.flow.name = text
@@ -249,7 +311,9 @@ class MainWindow(q.QMainWindow):
 
     def readFlow(self, path: str) -> bool:
         if self.flow and self.unsaved:
-            ret = q.QMessageBox.question(self, 'Unsaved changes', f'{self.flow.name} has unsaved changes. Save changes before opening another file?', q.QMessageBox.Yes | q.QMessageBox.No | q.QMessageBox.Cancel)
+            ret = q.QMessageBox.question(self, 'Unsaved changes',
+                                         f'{self.flow.name} has unsaved changes. Save changes before opening another file?',
+                                         q.QMessageBox.Yes | q.QMessageBox.No | q.QMessageBox.Cancel)
             if ret == q.QMessageBox.Yes:
                 self.writeFlow(self.flow_path)
             elif ret == q.QMessageBox.Cancel:
@@ -281,7 +345,8 @@ class MainWindow(q.QMainWindow):
             return True
         except:
             traceback.print_exc()
-            q.QMessageBox.critical(self, 'Save', 'Failed to write event flow. Please ensure there are no placeholder events left.')
+            q.QMessageBox.critical(self, 'Save',
+                                   'Failed to write event flow. Please ensure there are no placeholder events left.')
             return False
 
     def onNewFile(self) -> bool:
@@ -344,6 +409,7 @@ class MainWindow(q.QMainWindow):
         visible = self.event_param_visible_action.isChecked()
         self.flowchart_view.eventParamVisibilityChanged.emit(visible)
 
+
 def main() -> None:
     qc.QCoreApplication.setOrganizationName('eventeditor')
     qc.QCoreApplication.setApplicationName('eventeditor')
@@ -364,6 +430,7 @@ def main() -> None:
     win.show()
     ret = app.exec_()
     sys.exit(ret)
+
 
 if __name__ == '__main__':
     main()

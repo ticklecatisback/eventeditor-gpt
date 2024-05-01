@@ -6,8 +6,7 @@ import eventeditor.util as util
 from evfl import ActorIdentifier, Argument, Container
 import PyQt5.QtCore as qc
 import PyQt5.QtWidgets as q
-
-_call_count = 0
+import sys
 class TestEnum(IntEnum):
     A = 0
     B = auto()
@@ -57,6 +56,7 @@ class ContainerModel(qc.QAbstractTableModel):
         self.dataChanged.emit(self.createIndex(row, ContainerModelColumn.DataType), self.createIndex(row, ContainerModelColumn.Value))
 
     def columnCount(self, parent=qc.QModelIndex()):
+        sys.setrecursionlimit(1500)
         logging.debug("Entering columnCount")
         count = len(ContainerModelColumn)
         logging.debug(f"Exiting columnCount with count: {count}")

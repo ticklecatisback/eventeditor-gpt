@@ -40,7 +40,10 @@ class FlowData(qc.QObject):
 
         self._next_event_idx = 0
 
-    def setFlow(self, flow: typing.Optional[EventFlow]):
+    def setFlow(self, flow: typing.Optional[EventFlow] = None):
+        if flow is None:
+            flow = EventFlow()  # Default to a new EventFlow only if none provided
+
         self.flow = flow
         self.actor_model.set(flow)
         self.entry_point_model.set(flow)
@@ -48,7 +51,6 @@ class FlowData(qc.QObject):
         self.flowDataChanged.emit(FlowDataChangeReason.Reset)
         self.fileLoaded.emit(flow)
         self._next_event_idx = self.computeNextEventIdx()
-        self.setFlow(EventFlow())
 
     def computeNextEventIdx(self):
         if not self.flow or not self.flow.flowchart:

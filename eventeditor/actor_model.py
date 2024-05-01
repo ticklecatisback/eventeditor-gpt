@@ -6,6 +6,10 @@ from evfl.entry_point import EntryPoint
 import PyQt5.QtCore as qc # type: ignore
 import PyQt5.QtWidgets as q # type: ignore
 import chatgpt_events as cge
+import sys
+
+
+sys.setrecursionlimit(1500)  # Increases the limit, 1000 is default
 
 
 class ActorModelColumn(IntEnum):
